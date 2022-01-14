@@ -4,3 +4,7 @@
 *.ptx
 *.cubin
 *.fatbin
+build/
+.*.swp
+.*.swo
+.ccls-cache/
