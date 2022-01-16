@@ -28,21 +28,21 @@ static double CND(double d)
 
 void BlackScholesCall(double &callResult, EuropeanOption option)
 {
-  double S = option.GetS();
-  double X = option.GetK();
-  double T = option.GetT();
-  double R = option.GetR();
-  double V = option.GetV();
+  double S = option.S;
+  double K = option.K;
+  double T = option.T;
+  double R = option.R;
+  double V = option.V;
 
   double sqrtT = sqrt(T);
-  double    d1 = (log(S / X) + (R + (double)0.5 * V * V) * T) / (V * sqrtT);
+  double    d1 = (log(S / K) + (R + (double)0.5 * V * V) * T) / (V * sqrtT);
   double    d2 = d1 - V * sqrtT;
   double CNDD1 = CND(d1);
   double CNDD2 = CND(d2);
 
   //Calculate Call and Put simultaneously
   double expRT = exp(- R * T);
-  callResult   = (double)(S * CNDD1 - X * expRT * CNDD2);
+  callResult   = (double)(S * CNDD1 - K * expRT * CNDD2);
 }
 
 #endif

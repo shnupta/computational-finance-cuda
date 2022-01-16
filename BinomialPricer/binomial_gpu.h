@@ -3,6 +3,6 @@
 
 #include "option.h"
 
-void BinomialPricingGPU(double *callValue, EuropeanOption *option, int optionsNum);
+void BinomialPricingGPU(double *callValue, EuropeanOption *options, int optionsNum);
 
 #endif
