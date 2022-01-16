@@ -85,6 +85,11 @@ __global__ void BinomialOptionsKernel() {
       }
     }
   }
+
+  if (tid == 0)
+  {
+      dev_CallValues[bid] = call[0];
+  }
 }
 
 void BinomialPricingGPU(double *callValues, EuropeanOption *options, int optionsNum) {
