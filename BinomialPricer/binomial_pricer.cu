@@ -2,8 +2,10 @@
 #include "option.h"
 #include "black_scholes.h"
 #include "binomial_gpu.h"
+#include "binomial_cpu.h"
 #include <iostream>
 #include <cmath>
+#include <chrono>
 
 #include <helper_cuda.h>
 
@@ -18,9 +20,9 @@ int main() {
   const int timeSteps = TIME_STEPS;
 
   float elapsedTimeGPU;
-  cudaEvent_t start, end;
-  checkCudaErrors(cudaEventCreate(&start));
-  checkCudaErrors(cudaEventCreate(&end));
+  cudaEvent_t startGpu, endGpu;
+  checkCudaErrors(cudaEventCreate(&startGpu));
+  checkCudaErrors(cudaEventCreate(&endGpu));
 
   EuropeanOption options[numOptions];
   double callValueBS[numOptions];
@@ -43,16 +45,24 @@ int main() {
   }
 
   std::cout << "Generated " << numOptions << " options.\n";
-  std::cout << "Running over " << timeSteps << " time steps.\n";
+  std::cout << "Running over " << timeSteps << " time steps.\n\n";
 
   std::cout << "Running GPU kernel...\n";
-  checkCudaErrors(cudaEventRecord(start, 0));
+  checkCudaErrors(cudaEventRecord(startGpu, 0));
   BinomialPricingGPU(callValueGPU, options, numOptions);
-  checkCudaErrors(cudaEventRecord(end, 0));
-  checkCudaErrors(cudaEventSynchronize(end));
+  checkCudaErrors(cudaEventRecord(endGpu, 0));
+  checkCudaErrors(cudaEventSynchronize(endGpu));
 
-  checkCudaErrors(cudaEventElapsedTime(&elapsedTimeGPU, start, end));
-  std::cout << "Time taken: " << elapsedTimeGPU << " ms\n";
+  checkCudaErrors(cudaEventElapsedTime(&elapsedTimeGPU, startGpu, endGpu));
+  std::cout << "Time taken: " << elapsedTimeGPU << " ms\n\n";
+
+  std::cout << "Running CPU version...\n";
+  std::chrono::steady_clock::time_point startCpu = std::chrono::steady_clock::now();
+  for (int i = 0; i < numOptions; i++) {
+    BinomialPricingCPU(callValueCPU[i], options[i]);
+  }
+  std::chrono::steady_clock::time_point endCpu = std::chrono::steady_clock::now();
+  std::cout << "Time taken: " << std::chrono::duration_cast<std::chrono::milliseconds>(endCpu - startCpu).count() << " ms\n";
 
   return 0;
 }
