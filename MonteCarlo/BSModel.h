@@ -1,5 +1,7 @@
-#ifndef BS_MODEL_H
-#define BS_MODEL_H
+#ifndef BSModel_h
+#define BSModel_h
+
+#include "Matrix.h"
 
 #include <vector>
 #include <ctime>
@@ -8,6 +10,7 @@
 using namespace std;
 
 typedef vector<double> SamplePath;
+typedef vector<Vector> BasketSamplePath;
 
 class BSModel {
   public:
@@ -22,6 +25,21 @@ class BSModel {
 
   private:
     double S0, r, sigma;
+};
+
+class BSModelBasket {
+  public:
+    BSModelBasket(Vector S0_, double r_, Matrix C_);
+    void GenerateSamplePath(double T, int m, BasketSamplePath& S);
+    Vector GetS0() { return S0; }
+    double GetR() { return r; }
+    Vector GetSigma() { return sigma; }
+
+
+  private:
+    Vector S0, sigma;
+    double r;
+    Matrix C;
 };
 
 #endif
