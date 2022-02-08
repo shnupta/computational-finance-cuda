@@ -8,3 +8,5 @@ build/
 .*.swp
 .*.swo
 .ccls-cache/
+bin/
+lib/
