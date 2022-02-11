@@ -1,6 +1,7 @@
 #include <iostream>
 #include "BSModel.h"
 #include "PathDepOption.h"
+#include "EurCall.h"
 
 using namespace std;
 
@@ -12,10 +13,13 @@ int main() {
   int m = 30;
   ArthmAsianCall option(T, K, m);
   GmtrAsianCall cvOption(T, K, m);
+  EurCall eur(T, K, m);
 
   long N = 30000;
   double epsilon = 0.001;
   option.PriceByVarRedMC(model, N, cvOption);
+  cout << "European Call Price = " << eur.PriceByMC(model, N) << endl;
+  cout << "By BS Forumla = " << eur.PriceByBSFormula(S0, sigma, r) << endl << endl;
   cout << "Asian Call Price (w/ Variance Reduction) = " << option.GetPrice() << endl;
   cout << "Pricing Error = " << option.GetPricingError() << endl << endl;
   /* cout << "Option Delta = " << option.GetDelta() << endl; */

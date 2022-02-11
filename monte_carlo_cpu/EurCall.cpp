@@ -1,5 +1,6 @@
 #include "EurCall.h"
 #include <cmath>
+#include <algorithm>
 
 double N(double x)
 {
@@ -40,5 +41,15 @@ double EurCall::VegaByBSFormula(double S0,
    double pi=4.0*atan(1.0);
    return S0*exp(-d_plus(S0,sigma,r)*d_plus(S0,sigma,r)/2)*sqrt(T)
       /sqrt(2.0*pi);
+}
+
+double EurCall::PriceByMC(BSModel model, long N) {
+  double C = 0.0;
+  SamplePath S(m);
+  for (long i = 0; i < N; ++i) {
+    model.GenerateSamplePath(T, m, S);
+    C = (i * C + std::max(S[m-1] - K, 0.0)) / (i + 1.0);
+  }
+  return exp(-model.GetR() * T) * C;
 }
 
