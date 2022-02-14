@@ -30,8 +30,8 @@ __device__ void GenerateSamplePath(VanillaEuropean option, double* path,
 }
 
 __global__ void PriceByMC(VanillaEuropean* options, double* optionValues, 
-    const int optionsNum, const long simNum, const int timeSteps,
-    curandState_t* devStates) {
+    double* optionDeltas, const int optionsNum, const long simNum, 
+    const int timeSteps, curandState_t* devStates) {
   int bid = blockIdx.x;
   int tid = threadIdx.x;
   int id = tid + bid * blockDim.x;
@@ -40,7 +40,9 @@ __global__ void PriceByMC(VanillaEuropean* options, double* optionValues,
   int i = 0;
 
   __shared__ double payoffs[THREADBLOCK_SIZE];
+  __shared__ double deltas[THREADBLOCK_SIZE];
   double threadPayoff = 0.0;
+  double threadDelta = 0.0;
 
   curandState_t* state = &devStates[id];
 
@@ -54,18 +56,25 @@ __global__ void PriceByMC(VanillaEuropean* options, double* optionValues,
     GenerateSamplePath(option, path, timeSteps, state);
     threadPayoff = (i * threadPayoff + option.Payoff(path, timeSteps)) 
       / (i + 1.0);
+    double dY_dS0 = (path[timeSteps - 1] / option.GetS0())
+      * (path[timeSteps - 1] > option.GetStrike() ? 1.0 : 0.0);
+    threadDelta = (i * threadDelta + dY_dS0) / (i + 1.0);
     simNo += THREADBLOCK_SIZE;
     i++;
   }
   payoffs[tid] = threadPayoff;
+  deltas[tid] = threadDelta;
   __syncthreads();
 
   if (tid == 0) {
     double avg = 0.0;
+    double deltaAvg = 0.0; 
     for (int j = 0; j < THREADBLOCK_SIZE; ++j) {
       avg = (j * avg + payoffs[j]) / (j + 1.0);
+      deltaAvg = (j * deltaAvg + deltas[j]) / (j + 1.0);
     }
     optionValues[bid] = exp(-r * option.GetTTM()) * avg;
+    optionDeltas[bid] = exp(-r * option.GetTTM()) * deltaAvg;
   }
 }
 
@@ -90,9 +99,12 @@ int main() {
       cudaMemcpyHostToDevice);
 
   double optionValues[optionsNum];
+  double optionDeltas[optionsNum];
 
   double* dev_optionValues;
+  double* dev_optionDeltas;
   cudaMalloc((void**) &dev_optionValues, sizeof(double) * optionsNum);
+  cudaMalloc((void**) &dev_optionDeltas, sizeof(double) * optionsNum);
 
   const int totalThreads = 1024 * optionsNum;
   curandState_t* devStates;
@@ -100,15 +112,27 @@ int main() {
 
   InitRandomStates<<<optionsNum, 1024>>>(devStates);
 
-  PriceByMC<<<optionsNum, 1024>>>(dev_options, dev_optionValues, optionsNum,
+  PriceByMC<<<optionsNum, 1024>>>(dev_options, dev_optionValues, 
+      dev_optionDeltas, optionsNum,
       simNum, timeSteps, devStates);
 
   cudaMemcpy(optionValues, dev_optionValues, sizeof(double) * optionsNum,
       cudaMemcpyDeviceToHost);
+  cudaMemcpy(optionDeltas, dev_optionDeltas, sizeof(double) * optionsNum,
+      cudaMemcpyDeviceToHost);
 
+  std::cout << "S(0) = " << options[0].GetS0() << std::endl;
+  std::cout << "K = " << options[0].GetStrike() << std::endl;
+  std::cout << "TTM = " << options[0].GetTTM() << std::endl;
+  std::cout << "sigma = " << options[0].GetSigma() << std::endl;
+  std::cout << "isCall? " << options[0].IsCall() << std::endl;
+  std::cout << "r = " << r << std::endl;
+
+  std::cout << std::endl << "=== Calculated ===" << std::endl;
   std::cout << "Option value = " << optionValues[0] << std::endl;
   std::cout << "By BS Forumla = " << options[0].PriceByBSFormula(r) 
     << std::endl;
+  std::cout << "Delta = " << optionDeltas[0] << std::endl;
 
   cudaFree(dev_options);
   cudaFree(dev_optionValues);
