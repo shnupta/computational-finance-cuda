@@ -6,8 +6,8 @@
 #include <iostream>
 #include <stdio.h>
 
-/* #define THREADBLOCK_SIZE 1024 */ 
-#define THREADBLOCK_SIZE 2
+#define THREADBLOCK_SIZE 1024 
+/* #define THREADBLOCK_SIZE 2 */
 
 #define r 0.03
 
@@ -53,8 +53,11 @@ __device__ void GenerateSamplePathQuasi(VanillaEuropean option, double* path,
   double sigma = option.GetSigma();
   double T = option.GetTTM();
   int m = timeSteps;
+  int id = threadIdx.x + blockIdx.x * blockDim.x;
   for (int k = 0; k < m; k++) {
     const double z = curand_normal_double(&states[k]);
+    if (&path[k] == 0x0)
+      printf("ERROR: Accessing random state index = %d\n&path = %p\n===\n", 300 * id + k, path);
     path[k] = St * exp((r - sigma*sigma * 0.5) * (T/m) + sigma * sqrt(T/m) 
         * z);
     St = path[k];
@@ -117,7 +120,7 @@ __global__ void PriceByMC(VanillaEuropean* options, double* optionValues,
 
 __global__ void PriceByMCQuasi(VanillaEuropean* options, double* optionValues, 
     double* optionDeltas, const int optionsNum, const long simNum, 
-    const int timeSteps, curandStateScrambledSobol32_t* devStates) {
+    const int timeSteps, curandStateScrambledSobol32_t* devStates, double* dev_paths) {
   int bid = blockIdx.x;
   int tid = threadIdx.x;
   int id = tid + bid * blockDim.x;
@@ -135,7 +138,7 @@ __global__ void PriceByMCQuasi(VanillaEuropean* options, double* optionValues,
   if (bid >= optionsNum) return;
 
   VanillaEuropean option = options[bid];
-  double* path = new double[timeSteps];
+  double* path = &dev_paths[300 * id];
 
   while (simNo < simNum) {
     // Generate sample path of this option
@@ -198,6 +201,9 @@ int main() {
 
   const int totalThreads = THREADBLOCK_SIZE * optionsNum;
 
+  double* dev_paths;
+  checkCudaErrors(cudaMalloc((void**) &dev_paths, totalThreads * timeSteps * sizeof(double)));
+
   curandState_t* devStates;
   cudaMalloc((void**) &devStates, totalThreads * sizeof(curandState_t));
 
@@ -219,7 +225,6 @@ int main() {
 
   checkCudaErrors(cudaMemcpy(dev_directionVectors, directionVectors,
       timeSteps * sizeof(curandDirectionVectors32_t), cudaMemcpyHostToDevice));
-  printf("HI\n");
 
   unsigned int* scrambleConstants;
   curandGetScrambleConstants32(&scrambleConstants);
@@ -241,9 +246,9 @@ int main() {
   cudaEventRecord(start);
   PriceByMCQuasi<<<optionsNum, THREADBLOCK_SIZE>>>(dev_options, dev_optionValues, 
       dev_optionDeltas, optionsNum,
-      simNum, timeSteps, devQuasiStates);
-  /* cudaDeviceSynchronize(); */
+      simNum, timeSteps, devQuasiStates, dev_paths);
   cudaEventRecord(stop);
+  cudaDeviceSynchronize();
   getLastCudaError("Quasi kernel failed\n");
 
   /* cudaEventRecord(start); */
@@ -281,6 +286,7 @@ int main() {
   cudaFree(devStates);
   cudaFree(devQuasiStates);
   cudaFree(dev_directionVectors);
+  cudaFree(dev_paths);
   cudaEventDestroy(start);
   cudaEventDestroy(stop);
 }
