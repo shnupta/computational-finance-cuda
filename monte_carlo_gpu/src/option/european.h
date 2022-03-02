@@ -2,6 +2,8 @@
 
 #include "common.h"
 
+#include <stdio.h>
+
 class VanillaEuropean {
   public:
     VanillaEuropean(bool isCall, double strike, double S0, double sigma,

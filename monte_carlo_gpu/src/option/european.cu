@@ -8,6 +8,7 @@ VanillaEuropean::VanillaEuropean(bool isCall, double strike, double S0,
 
 __host__ __device__ double VanillaEuropean::Payoff(double* path, const int size) {
   double diff = path[size-1] - strike_;
+  /* printf("last stock price = %f\n", path[size-1]); */
   if (!isCall_) diff = -diff;
   return diff > 0 ? diff : 0;
 } 
