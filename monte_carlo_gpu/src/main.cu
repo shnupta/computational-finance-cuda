@@ -277,15 +277,20 @@ int main() {
   std::cout << "isCall? " << options[0].IsCall() << std::endl;
   std::cout << "r = " << r << std::endl;
 
+  double avgError = 0.0;
+
   std::cout << std::endl << "=== Calculated ===" << std::endl;
   for (int i = 0; i < optionsNum; ++i) {
+    double error = abs(options[i].PriceByBSFormula(r) - optionValues[i]);
     std::cout << "Option " << i << "\n---------" << std::endl;
     std::cout << "Option value = " << optionValues[i] << std::endl;
     std::cout << "Delta = " << optionDeltas[i] << std::endl;
     std::cout << "BS Forumla value = " << options[i].PriceByBSFormula(r) 
       << std::endl;
-    std::cout << "Absolute error = " << abs(options[i].PriceByBSFormula(r) - optionValues[i]) << std::endl << std::endl;
+    std::cout << "Absolute error = " << error << std::endl << std::endl;
+    avgError = (i * avgError + error) / (i + 1.0);
   }
+  std::cout << "Average absolute error: " << avgError << std::endl;
 
   cudaFree(dev_options);
   cudaFree(dev_optionValues);
