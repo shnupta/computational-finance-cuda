@@ -6,7 +6,8 @@
 #include <iostream>
 #include <stdio.h>
 
-#define THREADBLOCK_SIZE 512
+/* #define THREADBLOCK_SIZE 1024 */ 
+#define THREADBLOCK_SIZE 2
 
 #define r 0.03
 
@@ -20,11 +21,13 @@ __global__ void InitRandomStates(curandState_t* devStates) {
 __global__ void InitRandomStatesQuasi(curandStateScrambledSobol32_t* devStates,
     curandDirectionVectors32_t* directionVectors, unsigned int* scrambleConstants) {
   int id = threadIdx.x + blockIdx.x * blockDim.x;
-  /* Each thread gets a different offset TODO: Check this */ 
-  // optionsNum * timeSteps dimensions only needed
-  // TODO: Learn how to initialise properly
+
+  // Use the same timeSteps dimensions, but offset each thread by ?
   for (int i = 0; i < 300; i++) {
-    curand_init(directionVectors[id + i], scrambleConstants[id + i], 0, &devStates[id + i]);
+    unsigned int offset = id * ((10000 / blockDim.x) + 1);
+    /* printf("blockDim.x = %d    blockIdx.x = %d\n", blockDim.x, blockIdx.x); */
+    /* printf("rand init    id = %d    dim = %d    offset = %u    state idx = %d\n", id, i, offset, 300 * id + i); */
+    curand_init(directionVectors[i], scrambleConstants[i], offset, &devStates[300 * id + i]);
   }
 }
 
@@ -117,7 +120,7 @@ __global__ void PriceByMCQuasi(VanillaEuropean* options, double* optionValues,
     const int timeSteps, curandStateScrambledSobol32_t* devStates) {
   int bid = blockIdx.x;
   int tid = threadIdx.x;
-  /* int id = tid + bid * blockDim.x; */
+  int id = tid + bid * blockDim.x;
 
   int simNo = tid;
   int i = 0;
@@ -127,7 +130,7 @@ __global__ void PriceByMCQuasi(VanillaEuropean* options, double* optionValues,
   double threadPayoff = 0.0;
   double threadDelta = 0.0;
 
-  curandStateScrambledSobol32_t* states = &devStates[bid];
+  curandStateScrambledSobol32_t* states = &devStates[300 * id];
 
   if (bid >= optionsNum) return;
 
@@ -139,8 +142,8 @@ __global__ void PriceByMCQuasi(VanillaEuropean* options, double* optionValues,
     GenerateSamplePathQuasi(option, path, timeSteps, states);
     threadPayoff = (i * threadPayoff + option.Payoff(path, timeSteps)) 
       / (i + 1.0);
-    /* if (threadIdx.x == 0) */
-    /*   printf("last path = %f  avg payoff so far = %f\n", path[timeSteps-1], threadPayoff); */
+    /* if (id < 5) */
+    /*   printf("id = %d  last path = %f  avg payoff so far = %f\n", id, path[timeSteps-1], threadPayoff); */
     double dY_dS0 = (path[timeSteps - 1] / option.GetS0())
       * (path[timeSteps - 1] > option.GetStrike() ? 1.0 : 0.0);
     threadDelta = (i * threadDelta + dY_dS0) / (i + 1.0);
@@ -171,12 +174,13 @@ int main() {
   const double sigma = 0.2;
   const double ttm = 1.0 / 12.0; // 1 month
 
-  const int optionsNum = 1;
-  const long simNum = 100000;
+  const int optionsNum = 2;
+  const long simNum = 10000;
   const int timeSteps = 300;
 
   VanillaEuropean options[optionsNum];
   options[0] = VanillaEuropean(isCall, strike, s0, sigma, ttm);
+  options[1] = VanillaEuropean(isCall, strike, s0, sigma, ttm);
 
   VanillaEuropean* dev_options;
   cudaMalloc((void**) &dev_options, sizeof(VanillaEuropean) * optionsNum);
@@ -199,28 +203,31 @@ int main() {
 
   // Each thread has timeSteps states
   curandStateScrambledSobol32_t* devQuasiStates;
-  cudaMalloc((void**) &devQuasiStates,
-      optionsNum * THREADBLOCK_SIZE * timeSteps * sizeof(curandStateScrambledSobol32_t));
+  checkCudaErrors(cudaMalloc((void**) &devQuasiStates,
+      totalThreads * timeSteps * sizeof(curandStateScrambledSobol32_t)));
 
   curandDirectionVectors32_t* directionVectors;
   curandGetDirectionVectors32(&directionVectors,
       CURAND_SCRAMBLED_DIRECTION_VECTORS_32_JOEKUO6);
 
-  // We need optionsNum * timeSteps dimensions
+  // We need timeSteps dimensions (dimensions are shared but with each thread having an offset)
   curandDirectionVectors32_t* dev_directionVectors;
   checkCudaErrors(cudaMalloc((void**) &dev_directionVectors,
-      optionsNum * timeSteps * sizeof(curandDirectionVectors32_t)));
+      timeSteps * sizeof(curandDirectionVectors32_t)));
+  /* printf("%d\n", totalThreads * timeSteps); */
+  /* printf("%lu\n", totalThreads * timeSteps * sizeof(curandDirectionVectors32_t)); */
 
   checkCudaErrors(cudaMemcpy(dev_directionVectors, directionVectors,
-      optionsNum * timeSteps * sizeof(curandDirectionVectors32_t), cudaMemcpyHostToDevice));
+      timeSteps * sizeof(curandDirectionVectors32_t), cudaMemcpyHostToDevice));
+  printf("HI\n");
 
   unsigned int* scrambleConstants;
   curandGetScrambleConstants32(&scrambleConstants);
   unsigned int* dev_scrambleConstants;
   checkCudaErrors(cudaMalloc((void**) &dev_scrambleConstants,
-        optionsNum * timeSteps * sizeof(unsigned int)));
+        timeSteps * sizeof(unsigned int)));
   checkCudaErrors(cudaMemcpy(dev_scrambleConstants, scrambleConstants,
-        optionsNum * timeSteps * sizeof(unsigned int), cudaMemcpyHostToDevice));
+        timeSteps * sizeof(unsigned int), cudaMemcpyHostToDevice));
 
   InitRandomStates<<<optionsNum, THREADBLOCK_SIZE>>>(devStates);
   InitRandomStatesQuasi<<<optionsNum, THREADBLOCK_SIZE>>>(devQuasiStates,
@@ -274,4 +281,6 @@ int main() {
   cudaFree(devStates);
   cudaFree(devQuasiStates);
   cudaFree(dev_directionVectors);
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
 }
