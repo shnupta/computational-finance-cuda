@@ -177,13 +177,14 @@ int main() {
   const double sigma = 0.2;
   const double ttm = 1.0 / 12.0; // 1 month
 
-  const int optionsNum = 2;
+  const int optionsNum = 10;
   const long simNum = 30000;
   const int timeSteps = 300;
 
   VanillaEuropean options[optionsNum];
-  options[0] = VanillaEuropean(isCall, strike, s0, sigma, ttm);
-  options[1] = VanillaEuropean(isCall, strike, s0, sigma, ttm);
+  for (int i = 0; i < optionsNum; ++i) {
+    options[i] = VanillaEuropean(isCall, strike, s0, sigma, ttm);
+  }
 
   VanillaEuropean* dev_options;
   cudaMalloc((void**) &dev_options, sizeof(VanillaEuropean) * optionsNum);
@@ -243,21 +244,21 @@ int main() {
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
 
-  /* cudaEventRecord(start); */
-  /* PriceByMCQuasi<<<optionsNum, THREADBLOCK_SIZE>>>(dev_options, dev_optionValues, */ 
-  /*     dev_optionDeltas, optionsNum, */
-  /*     simNum, timeSteps, devQuasiStates, dev_paths); */
-  /* cudaEventRecord(stop); */
-  /* cudaDeviceSynchronize(); */
-  /* getLastCudaError("Quasi kernel failed\n"); */
-
   cudaEventRecord(start);
-  PriceByMC<<<optionsNum, THREADBLOCK_SIZE>>>(dev_options, dev_optionValues, 
+  PriceByMCQuasi<<<optionsNum, THREADBLOCK_SIZE>>>(dev_options, dev_optionValues, 
       dev_optionDeltas, optionsNum,
-      simNum, timeSteps, devStates, dev_paths);
+      simNum, timeSteps, devQuasiStates, dev_paths);
   cudaEventRecord(stop);
   cudaDeviceSynchronize();
-  getLastCudaError("Normal kernel failed\n");
+  getLastCudaError("Quasi kernel failed\n");
+
+  /* cudaEventRecord(start); */
+  /* PriceByMC<<<optionsNum, THREADBLOCK_SIZE>>>(dev_options, dev_optionValues, */ 
+  /*     dev_optionDeltas, optionsNum, */
+  /*     simNum, timeSteps, devStates, dev_paths); */
+  /* cudaEventRecord(stop); */
+  /* cudaDeviceSynchronize(); */
+  /* getLastCudaError("Normal kernel failed\n"); */
 
   cudaEventSynchronize(stop);
   float milliseconds = 0;
@@ -277,11 +278,14 @@ int main() {
   std::cout << "r = " << r << std::endl;
 
   std::cout << std::endl << "=== Calculated ===" << std::endl;
-  std::cout << "Option value = " << optionValues[0] << std::endl;
-  std::cout << "Delta = " << optionDeltas[0] << std::endl;
-  std::cout << "BS Forumla value = " << options[0].PriceByBSFormula(r) 
-    << std::endl;
-  std::cout << "Absolute error = " << abs(options[0].PriceByBSFormula(r) - optionValues[0]) << std::endl;
+  for (int i = 0; i < optionsNum; ++i) {
+    std::cout << "Option " << i << "\n---------" << std::endl;
+    std::cout << "Option value = " << optionValues[i] << std::endl;
+    std::cout << "Delta = " << optionDeltas[i] << std::endl;
+    std::cout << "BS Forumla value = " << options[i].PriceByBSFormula(r) 
+      << std::endl;
+    std::cout << "Absolute error = " << abs(options[i].PriceByBSFormula(r) - optionValues[i]) << std::endl << std::endl;
+  }
 
   cudaFree(dev_options);
   cudaFree(dev_optionValues);
