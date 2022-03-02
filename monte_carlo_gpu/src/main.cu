@@ -6,7 +6,7 @@
 #include <iostream>
 #include <stdio.h>
 
-#define THREADBLOCK_SIZE 1024 
+#define THREADBLOCK_SIZE 512
 /* #define THREADBLOCK_SIZE 2 */
 
 #define r 0.03
@@ -68,7 +68,7 @@ __device__ void GenerateSamplePathQuasi(VanillaEuropean option, double* path,
 
 __global__ void PriceByMC(VanillaEuropean* options, double* optionValues, 
     double* optionDeltas, const int optionsNum, const long simNum, 
-    const int timeSteps, curandState_t* devStates) {
+    const int timeSteps, curandState_t* devStates, double* dev_paths) {
   int bid = blockIdx.x;
   int tid = threadIdx.x;
   int id = tid + bid * blockDim.x;
@@ -86,7 +86,7 @@ __global__ void PriceByMC(VanillaEuropean* options, double* optionValues,
   if (bid >= optionsNum) return;
 
   VanillaEuropean option = options[bid];
-  double* path = new double[timeSteps];
+  double* path = &dev_paths[300 * id];
 
   while (simNo < simNum) {
     // Generate sample path of this option
@@ -178,7 +178,7 @@ int main() {
   const double ttm = 1.0 / 12.0; // 1 month
 
   const int optionsNum = 2;
-  const long simNum = 10000;
+  const long simNum = 30000;
   const int timeSteps = 300;
 
   VanillaEuropean options[optionsNum];
@@ -243,20 +243,21 @@ int main() {
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
 
+  /* cudaEventRecord(start); */
+  /* PriceByMCQuasi<<<optionsNum, THREADBLOCK_SIZE>>>(dev_options, dev_optionValues, */ 
+  /*     dev_optionDeltas, optionsNum, */
+  /*     simNum, timeSteps, devQuasiStates, dev_paths); */
+  /* cudaEventRecord(stop); */
+  /* cudaDeviceSynchronize(); */
+  /* getLastCudaError("Quasi kernel failed\n"); */
+
   cudaEventRecord(start);
-  PriceByMCQuasi<<<optionsNum, THREADBLOCK_SIZE>>>(dev_options, dev_optionValues, 
+  PriceByMC<<<optionsNum, THREADBLOCK_SIZE>>>(dev_options, dev_optionValues, 
       dev_optionDeltas, optionsNum,
-      simNum, timeSteps, devQuasiStates, dev_paths);
+      simNum, timeSteps, devStates, dev_paths);
   cudaEventRecord(stop);
   cudaDeviceSynchronize();
-  getLastCudaError("Quasi kernel failed\n");
-
-  /* cudaEventRecord(start); */
-  /* PriceByMC<<<optionsNum, THREADBLOCK_SIZE>>>(dev_options, dev_optionValues, */ 
-  /*     dev_optionDeltas, optionsNum, */
-  /*     simNum, timeSteps, devStates); */
-  /* cudaEventRecord(stop); */
-  /* getLastCudaError("Normal kernel failed\n"); */
+  getLastCudaError("Normal kernel failed\n");
 
   cudaEventSynchronize(stop);
   float milliseconds = 0;
@@ -277,9 +278,10 @@ int main() {
 
   std::cout << std::endl << "=== Calculated ===" << std::endl;
   std::cout << "Option value = " << optionValues[0] << std::endl;
-  std::cout << "By BS Forumla = " << options[0].PriceByBSFormula(r) 
-    << std::endl;
   std::cout << "Delta = " << optionDeltas[0] << std::endl;
+  std::cout << "BS Forumla value = " << options[0].PriceByBSFormula(r) 
+    << std::endl;
+  std::cout << "Absolute error = " << abs(options[0].PriceByBSFormula(r) - optionValues[0]) << std::endl;
 
   cudaFree(dev_options);
   cudaFree(dev_optionValues);
