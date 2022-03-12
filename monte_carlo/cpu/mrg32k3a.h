@@ -107,6 +107,7 @@ class Mrg32k3a : public RNG {
 			// Same for y
 			double y = a21 * yn - a23 * yn2;
 			y -= long(y / m2) * m2;
+      if (y < 0) y += m2;
 			yn2 = yn1;
 			yn1 = yn;
 			yn = y;

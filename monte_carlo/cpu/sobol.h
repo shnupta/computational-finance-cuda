@@ -69,6 +69,10 @@ class Sobol : public RNG {
           });
     }
 
+    size_t SimulationDimension() const override  {
+      return dim;
+    }
+
   private:
     // Dimension
     size_t dim;

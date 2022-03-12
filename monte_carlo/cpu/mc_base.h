@@ -9,7 +9,7 @@ using namespace std;
 using Time = double;
 extern Time systemTime;
 
-// Definition of what data must be simulates
+// Definition of what data must be simulated
 struct SampleDef {
   // Do we need numeraire for this sample?
   // true for payment dates

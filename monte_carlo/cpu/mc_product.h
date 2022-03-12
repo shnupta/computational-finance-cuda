@@ -17,7 +17,8 @@ class EuropeanCall : public Product<T> {
         const Time settlementDate)
       : strike(strike), 
         exerciseDate(exerciseDate),
-        settlementDate(settlementDate) 
+        settlementDate(settlementDate),
+        labels(1)
     {
       // Timeline = { exercise date }
       timeline.push_back(exerciseDate);
@@ -364,7 +365,7 @@ class ContingentBond : public Product<T> {
         // ~smoothing
         payoffs[0] += digital * (start.libors[0] + coupons) * coverages[i]
           / end.numeraire;
-        payoffs[0] += 1.0 / path.back.numeraire;
+        payoffs[0] += 1.0 / path.back().numeraire;
       }
     }
 

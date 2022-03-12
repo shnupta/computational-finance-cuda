@@ -63,7 +63,7 @@ class BlackScholes : public Model<T> {
       }
 
       isTodayOnTimeline = (productTimeline[0] == systemTime);
-      defline = &defline;
+      this->defline = &defline;
 
       stds.resize(timeline.size() - 1);
       drifts.resize(timeline.size() - 1);
@@ -144,7 +144,7 @@ class BlackScholes : public Model<T> {
       const override 
     {
       // Spot price today
-      T spot = spot;
+      T spot = this->spot;
       size_t index = 0;
       if (isTodayOnTimeline) {
         FillScen(index, spot, path[index], (*defline)[index]);
